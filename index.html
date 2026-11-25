@@ -2108,7 +2108,7 @@
     </div>
     <div class="panel" style="margin-top:14px;"><div class="panel-head"><div><div class="panel-title">Demanda × supply por modelo</div><div class="panel-note" id="soe-mod-note"></div></div></div>
       <div class="table-scroll" style="max-height:none;"><table class="soe-tb" id="soe-mod"><thead id="soe-mod-h"></thead><tbody id="soe-mod-b"></tbody></table></div></div>
-    <div class="panel" style="margin-top:14px;"><div class="panel-head"><div><div class="panel-title">Por regional</div><div class="panel-note">Sell-out da semana, estoque em loja, cobertura e ruptura de cada regional Jovi.</div></div></div>
+    <div class="panel" style="margin-top:14px;"><div class="panel-head"><div><div class="panel-title">Por regional</div><div class="panel-note" id="soe-reg-note">Sell-out da semana, estoque em loja, cobertura e ruptura de cada regional Claro.</div></div><div class="re-seg" id="soe-reg-by"><button type="button" data-b="claro" class="on">Regional Claro</button><button type="button" data-b="jovi">Regional Jovi</button></div></div>
       <div class="table-scroll" style="max-height:none;"><table class="soe-tb" id="soe-reg"><thead id="soe-reg-h"></thead><tbody id="soe-reg-b"></tbody></table></div></div>
     <div style="display:grid; grid-template-columns:1fr; gap:14px; margin-top:14px;">
       <div class="panel"><div class="panel-head"><div><div class="panel-title">Lojas prioritárias para reposição</div><div class="panel-note">Lojas zeradas hoje em modelos ainda repostos, ordenadas pela venda que estão perdendo por semana.</div></div></div>
@@ -5706,7 +5706,7 @@ function embTag(s){ return s&&s.embaixador ? '<span class="emb-tag" title="Loja 
   }
 
   // ---------------- S&OE (reunião semanal com a Claro) ----------------
-  let soeWeek = null, chartSoeWk = null;
+  let soeWeek = null, chartSoeWk = null, soeRegBy = 'claro';
   // núcleo da perda por ruptura (mesma regra da aba Perda Ruptura): status diário de cada par loja × modelo e ritmo com estoque
   function vpCore(stores, P){
     const H = (typeof RAW_CLARO!=='undefined' && RAW_CLARO.estHist) ? RAW_CLARO.estHist : null; if(!H) return null;
@@ -5799,7 +5799,7 @@ function embTag(s){ return s&&s.embaixador ? '<span class="emb-tag" title="Loja 
     const wkOf = d => addD(d, -((new Date(d+'T00:00:00Z').getUTCDay()+6)%7));
     const S = {}; // S[weekStart] = {tot, p:{}, r:{}}
     const storeBy = {}; stores.forEach(s=>storeBy[s.code]=s);
-    (DATA.devSales||[]).forEach(x=>{ if(!codes.has(x.k) || x.d>REF) return; if(modelFilter && x.p!==modelFilter) return; const w=wkOf(x.d); const o=S[w]||(S[w]={tot:0,p:{},r:{}}); o.tot+=x.q; bump(o.p,x.p,x.q); bump(o.r,storeBy[x.k].regional||'N/D',x.q); });
+    (DATA.devSales||[]).forEach(x=>{ if(!codes.has(x.k) || x.d>REF) return; if(modelFilter && x.p!==modelFilter) return; const w=wkOf(x.d); const o=S[w]||(S[w]={tot:0,p:{},r:{},rc:{}}); o.tot+=x.q; bump(o.p,x.p,x.q); bump(o.r,storeBy[x.k].regional||'N/D',x.q); bump(o.rc,storeBy[x.k].tim_branch||'N/D',x.q); });
     const g = (w,f)=> S[w] ? f(S[w]) : 0;
     const T0 = g(wk(0),o=>o.tot), T1 = g(wk(1),o=>o.tot), M4 = [0,1,2,3].reduce((a,k)=>a+g(wk(k),o=>o.tot),0)/4;
     // estoque e supply por modelo
@@ -5812,8 +5812,8 @@ function embTag(s){ return s&&s.embaixador ? '<span class="emb-tag" title="Loja 
     const repostos = prods.map(p=>p.product).filter(p=>!PHASE_OUT_PRODUCTS.has(p));
     const core = vpCore(stores, repostos);
     const wDays = new Set(Array.from({length:7},(_,i)=>addD(wk(0),i)));
-    const lostP = {}, lostR = {}, lostStore = {}; let lostT = 0;
-    if(core){ core.days.forEach((d,i)=>{ if(!wDays.has(d)) return; core.pairs.forEach(x=>{ if(x.st[i]) return; lostT+=x.rate; bump(lostP,x.p,x.rate); bump(lostR,x.s.regional||'N/D',x.rate); }); });
+    const lostP = {}, lostR = {}, lostRC = {}, lostStore = {}; let lostT = 0;
+    if(core){ core.days.forEach((d,i)=>{ if(!wDays.has(d)) return; core.pairs.forEach(x=>{ if(x.st[i]) return; lostT+=x.rate; bump(lostP,x.p,x.rate); bump(lostR,x.s.regional||'N/D',x.rate); bump(lostRC,x.s.tim_branch||'N/D',x.rate); }); });
       core.pairs.forEach(x=>{ const pr=(x.s.products||[]).find(q=>q.product===x.p); if(!pr || (pr.estoque||0)<=0){ const o=lostStore[x.s.code]||(lostStore[x.s.code]={s:x.s,w:0,mods:[],tr:0}); o.w+=x.rate*7; o.mods.push(x.p.replace('JOVI ','')); o.tr+=pr?(pr.transferencia||0):0; } }); }
     const totLoja = Object.values(inv).reduce((a,o)=>a+o.loja,0), totTr = Object.values(inv).reduce((a,o)=>a+o.trans,0), totCD = Object.values(inv).reduce((a,o)=>a+o.cd,0);
     const zeroRep = repostos.reduce((a,p)=>a+inv[p].zero,0), allowRep = repostos.reduce((a,p)=>a+inv[p].allowed,0);
@@ -5858,11 +5858,14 @@ function embTag(s){ return s&&s.embaixador ? '<span class="emb-tag" title="Loja 
       <td>${fmtInt(r.o.loja)}</td><td>${fmtInt(r.o.trans)}</td><td>${fmtInt(r.o.cd)}</td><td><b>${fmtInt(r.tot)}</b></td><td>${cobCell(r.cL)}</td><td>${cobCell(r.cT)}</td><td>${r.po?'—':r.o.zero}</td><td class="vp-red">${r.po?'—':f1(r.lost)}</td><td>${r.st}</td><td class="soe-acao">${r.acao}</td></tr>`).join('')
       + `<tr class="soe-tot"><td>Total</td>${tws.map((v,i)=>`<td>${fmtInt(v)}</td>`).join('')}<td class="${cls(pc(tws[3],tws[2]))}">${pcT(pc(tws[3],tws[2]))}</td><td>${f1(tm4)}</td><td>${fmtInt(tI.l)}</td><td>${fmtInt(tI.t)}</td><td>${fmtInt(tI.c)}</td><td>${fmtInt(tI.l+tI.t+tI.c)}</td><td>${tm4?f1(tI.l/tm4):'—'}</td><td>${tm4?f1((tI.l+tI.t+tI.c)/tm4):'—'}</td><td>${tI.z}</td><td>${f1(lostT)}</td><td></td><td></td></tr>`;
     // por regional
-    const REG = ['SP','SE','S','NE','N','MW'].filter(r=>stores.some(s=>s.regional===r));
-    document.getElementById('soe-reg-h').innerHTML = `<tr><th>Regional</th><th>Lojas</th>${wh.map(w=>`<th class="${w===soeWeek?'soe-cur':''}">${W(w)}</th>`).join('')}<th>Δ vs sem. ant.</th><th>Estoque loja</th><th>Cobertura loja (sem.)</th><th>Modelos zerados (lojas)</th><th>Lojas zeradas</th><th>Perda ${W(wk(0))}</th></tr>`;
-    const regRows = REG.map(r=>{ const L=stores.filter(s=>s.regional===r); const ws=wh.map(w=>g(w,x=>x.r[r]||0)); const m4=ws.reduce((a,b)=>a+b,0)/4; const est=L.reduce((a,s)=>a+(s.products||[]).filter(pr=>inv[pr.product]).reduce((b,pr)=>b+(pr.estoque||0),0),0);
+    const byC = soeRegBy==='claro', RK = s=> byC ? s.tim_branch : s.regional;
+    { const sb = document.getElementById('soe-reg-by'); if(sb){ sb.querySelectorAll('button').forEach(b=>{ b.classList.toggle('on', b.dataset.b===soeRegBy); b.onclick = ()=>{ soeRegBy = b.dataset.b; renderAll(); }; }); }
+      const nt = document.getElementById('soe-reg-note'); if(nt) nt.textContent = `Sell-out da semana, estoque em loja, cobertura e ruptura de cada regional ${byC?'Claro':'Jovi'}.`; }
+    const REG = byC ? claroRegs(stores) : ['SP','SE','S','NE','N','MW'].filter(r=>stores.some(s=>s.regional===r));
+    document.getElementById('soe-reg-h').innerHTML = `<tr><th>${byC?'Regional Claro':'Regional Jovi'}</th><th>Lojas</th>${wh.map(w=>`<th class="${w===soeWeek?'soe-cur':''}">${W(w)}</th>`).join('')}<th>Δ vs sem. ant.</th><th>Estoque loja</th><th>Cobertura loja (sem.)</th><th>Modelos zerados (lojas)</th><th>Lojas zeradas</th><th>Perda ${W(wk(0))}</th></tr>`;
+    const regRows = REG.map(r=>{ const L=stores.filter(s=>RK(s)===r); const ws=wh.map(w=>g(w,x=>(byC?x.rc:x.r)[r]||0)); const m4=ws.reduce((a,b)=>a+b,0)/4; const est=L.reduce((a,s)=>a+(s.products||[]).filter(pr=>inv[pr.product]).reduce((b,pr)=>b+(pr.estoque||0),0),0);
       let z=0; const lz=new Set(); L.forEach(s=>(s.allowed_products||[]).forEach(p=>{ if(!repostos.includes(p)) return; const pr=(s.products||[]).find(q=>q.product===p); if(!pr||(pr.estoque||0)<=0){ z++; lz.add(s.code); } }));
-      return {r, n:L.length, ws, m4, est, z, lz:lz.size, lost:lostR[r]||0}; });
+      return {r, n:L.length, ws, m4, est, z, lz:lz.size, lost:(byC?lostRC:lostR)[r]||0}; });
     document.getElementById('soe-reg-b').innerHTML = regRows.map(x=>`<tr><td><b>${x.r}</b></td><td>${x.n}</td>${x.ws.map((v,i)=>`<td class="${i===3?'soe-cur':''}">${fmtInt(v)}</td>`).join('')}<td class="${cls(pc(x.ws[3],x.ws[2]))}">${pcT(pc(x.ws[3],x.ws[2]))}</td><td>${fmtInt(x.est)}</td><td>${cobCell(x.m4>0?x.est/x.m4:null)}</td><td>${x.z}</td><td>${x.lz}</td><td class="vp-red">${f1(x.lost)}</td></tr>`).join('')
       + `<tr class="soe-tot"><td>Total</td><td>${regRows.reduce((a,x)=>a+x.n,0)}</td>${[0,1,2,3].map(i=>`<td>${fmtInt(regRows.reduce((a,x)=>a+x.ws[i],0))}</td>`).join('')}<td></td><td>${fmtInt(regRows.reduce((a,x)=>a+x.est,0))}</td><td></td><td>${regRows.reduce((a,x)=>a+x.z,0)}</td><td>${regRows.reduce((a,x)=>a+x.lz,0)}</td><td>${f1(regRows.reduce((a,x)=>a+x.lost,0))}</td></tr>`;
     // lojas prioritárias e excesso
